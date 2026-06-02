@@ -4,6 +4,7 @@ from sqlalchemy import func
 from ..extensions import db
 from ..models import BusinessProfile, PipelineRun, DiscoveredQuery, ContentRecommendation
 from ..services.pipeline import run_pipeline
+from ..agents import ContentRecommendationAgent
 
 profiles_bp = Blueprint("profiles", __name__)
 
@@ -193,3 +194,59 @@ def get_recommendations(profile_uuid: str):
         .all()
     )
     return jsonify({"recommendations": [r.to_dict() for r in recs]}), 200
+
+
+# ── POST /api/v1/profiles/<uuid>/recommend ───────────────────────────────────
+
+@profiles_bp.post("/profiles/<string:profile_uuid>/recommend")
+def run_recommendation_agent(profile_uuid: str):
+    profile = BusinessProfile.query.get(profile_uuid)
+    if not profile:
+        return _error("Profile not found", 404)
+
+    data = request.get_json(silent=True) or {}
+    limit = min(data.get("limit", 5), 10)
+
+    queries = (
+        DiscoveredQuery.query
+        .filter_by(profile_uuid=profile_uuid)
+        .order_by(DiscoveredQuery.opportunity_score.asc())
+        .limit(limit)
+        .all()
+    )
+
+    if not queries:
+        return _error("No queries found for this profile. Run the pipeline first.", 404)
+
+    profile_dict = {
+        "name": profile.name,
+        "domain": profile.domain,
+        "industry": profile.industry,
+    }
+    target = [
+        {"query_text": q.query_text, "opportunity_score": q.opportunity_score, "query_uuid": q.uuid}
+        for q in queries
+    ]
+
+    agent = ContentRecommendationAgent()
+    recs, tokens = agent.run(profile_dict, target)
+
+    saved = []
+    for rec in recs:
+        cr = ContentRecommendation(
+            profile_uuid=profile_uuid,
+            query_uuid=rec["query_uuid"],
+            run_uuid=queries[0].run_uuid,
+            content_type=rec.get("content_type", "blog_post"),
+            title=rec.get("title", ""),
+            rationale=rec.get("rationale", ""),
+            target_keywords=rec.get("target_keywords", []),
+            priority=rec.get("priority", "medium"),
+            estimated_word_count=rec.get("estimated_word_count"),
+        )
+        db.session.add(cr)
+        saved.append(cr)
+
+    db.session.commit()
+
+    return jsonify({"recommendations": [r.to_dict() for r in saved], "tokens_used": tokens}), 200

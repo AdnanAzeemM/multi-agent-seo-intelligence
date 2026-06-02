@@ -1,9 +1,16 @@
+import logging
 from flask import Flask, jsonify
 from .config import Config
 from .extensions import db, migrate
 
 
 def create_app(config_class=Config):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 

@@ -41,12 +41,12 @@ Business: {name}
 Domain: {domain}
 Industry: {industry}
 
-These are the top queries where {domain} is NOT appearing in AI assistant answers:
+These are queries where {domain} has the most room to improve its AI assistant visibility (low opportunity score, weak visibility, or underperforming position):
 
 {queries_list}
 
 For each recommendation, specify which query it addresses via target_query_index (0-based). \
-Focus on content that AI assistants are likely to reference when answering these queries."""
+Focus on content that AI assistants are likely to reference when answering these queries — whether the goal is to first appear or to rank higher in AI answers."""
 
 
 class ContentRecommendationAgent(BaseAgent):

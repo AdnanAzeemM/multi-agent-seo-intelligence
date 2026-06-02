@@ -101,10 +101,19 @@ def run_pipeline(profile: BusinessProfile) -> PipelineRun:
 
         # ── Agent 3: Content Recommendations ─────────────────────────────────
         non_visible = sorted(
-            [dq for dq in saved_queries if dq.domain_visible is False],
+            [
+                dq for dq in saved_queries
+                if dq.domain_visible is False
+                or (dq.domain_visible is True and (dq.visibility_position or 0) > 5)
+            ],
             key=lambda x: x.opportunity_score,
             reverse=True,
         )[:10]
+
+        # Fallback: if domain is visible everywhere, use lowest-scored queries as improvement targets
+        if not non_visible:
+            non_visible = sorted(saved_queries, key=lambda x: x.opportunity_score)[:5]
+            logger.info("[run=%s] Agent 3: all queries visible — using bottom 5 by score as improvement targets", pipeline_run.uuid)
 
         logger.info("[run=%s] Agent 3: generating recommendations for %d queries", pipeline_run.uuid, len(non_visible))
         rec_agent = ContentRecommendationAgent()
